@@ -1,0 +1,569 @@
+\documentclass[compressed,dvips,letter]{beamer}
+
+\mode<presentation>
+{
+  \usetheme{Boadilla}
+  \setbeamercovered{dynamic}
+}
+
+\input{talk-preamble}
+\usepackage{array}
+\usepackage{subfigure}
+\usepackage{multirow}
+\usepackage{arydshln}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{amsmath}
+%\usepackage{pdfpages}
+
+
+\setbeamertemplate{navigation symbols}{}
+\setlength{\TPHorizModule}{1cm}
+\setlength{\TPVertModule}{1cm}
+
+
+\usefonttheme{professionalfonts}
+\title[A Guide to Julia's Dependencies]
+{A Guide to Julia's Dependencies\\
+\vspace{5pt}
+\small aka why does Julia take so long to compile from source?}
+
+\author{Tony Kelman}
+
+\institute[{\fontfamily{pcr}\selectfont @tkelman}]
+{
+  \footnotesize ({\fontfamily{pcr}\selectfont @tkelman} on Github)
+}
+
+\date[BAJU, Dec 4 2014]{\includegraphics[width=100pt]{fig/BAJU_logo.eps}
+\\Bay Area Julia Users\\December 4, 2014}
+
+\subject{}
+
+
+\begin{document}
+
+%\setbeamertemplate{blocks}[rounded][shadow=true]
+
+\setbeamertemplate{footline}{}
+\begin{frame}
+  \titlepage
+\end{frame}
+
+
+%
+%===========================================================================================
+%
+\setcounter{framenumber}{0}
+\setbeamertemplate{footline}[infolines theme]
+
+
+
+\begin{frame}[fragile]\frametitle{Who's this guy?}
+\begin{itemize}
+  \item Grad student at Berkeley in Mechanical Engineering
+  \item Julia user and contributor since February 2014
+  \item On Github: \includegraphics[width=50pt]{fig/Rejected_avatar.eps} {\tiny (look up ``Rejected" on Youtube)}
+  \item Because I was curious, which files have I committed to most?
+  
+  \tiny \begin{verbatim}
+$ git log --author=kelman --pretty=oneline --name-only | sort | uniq -c | sort -r -n | head -n 15
+     29 deps/Makefile
+     17 Make.inc
+     12 Makefile
+      8 base/interactiveutil.jl
+      6 src/flisp/Makefile
+      6 README.md
+      5 test/sparse.jl
+      5 test/file.jl
+      5 src/sys.c
+      5 src/support/Makefile
+      5 src/debuginfo.cpp
+      5 LICENSE.md
+      5 contrib/windows/msys_build.sh
+      5 appveyor.yml
+      5 .travis.yml
+  \end{verbatim}
+  \only<2>{\normalsize \vspace{-118pt}\alert<2>{\hspace{65pt} $\nwarrow$ \vspace{-8pt} \\ \hspace{77pt}  subject of this talk} \vspace{91.2pt}}
+
+\end{itemize}
+
+\end{frame}
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Julia's dependencies}
+
+\begin{block}{Open source and the shoulders of giants}
+\footnotesize
+``If I have seen further it is by standing on the shoulders of giants." -- Isaac Newton
+~ \\
+~ \\
+``We all build our ideas on the best ideas we can find. Now imagine if there were no more good ideas we were allowed to use." -- Bob Young, co-founder of Red Hat
+\end{block}
+
+\begin{itemize}
+\item \texttt{git clone git://github.com/JuliaLang/julia.git \\ cd julia \&\& make} ~~ takes a while -- the first time
+\item \texttt{deps/Makefile} downloads, configures, and compiles each dependency -- a few of them are much bigger than Julia is
+\item Three groups of dependencies:
+\begin{enumerate}
+\item Linked into \texttt{libjulia}, necessary to run the Julia JIT compiler
+\item Used in Julia's standard library via \texttt{ccall()} or process spawning
+\item Tools used only at build time to compile Julia (or other deps)
+\end{enumerate}
+
+\end{itemize}
+
+What does all this code do?
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Group 1, required for \texttt{libjulia}}
+\begin{itemize}
+\item LLVM
+\begin{itemize}
+\item JIT compiler
+\end{itemize}
+\item libuv
+\begin{itemize}
+\item Cross-platform input/output
+\end{itemize}
+\item libunwind
+\begin{itemize}
+\item Handling backtraces
+\end{itemize}
+\item utf8proc
+\begin{itemize}
+\item Unicode processing
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{LLVM, \url{http://llvm.org}}
+\begin{minipage}{0.35\textwidth}
+\includegraphics[width=125pt]{fig/LLVM_logo.eps}
+\end{minipage} \begin{minipage}{0.62\textwidth}
+\begin{itemize}
+\item What: formerly ``Low Level Virtual Machine,'' today general purpose compiler infrastructure
+\item Who: many contributors from Apple, Google, Intel, Mozilla, Julia, etc. \\ Used by Clang, Rust, Swift, Emscripten, WebKit (Safari)
+\item When: originally Chris Lattner's Masters and Ph.D theses, circa 2003
+\item License: University of Illinois / NCSA (permissive, BSD-style)
+\item Written in: \texttt{C++}
+\item Use in Julia: just in time compiler
+\end{itemize}
+\end{minipage}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{A quick introduction to classical compiler design - 1}
+From ``The Architecture of Open Source Applications,'' \url{http://www.aosabook.org/en/llvm.html}
+\begin{itemize}
+\item Basic 3 phase compiler
+\begin{figure}\includegraphics[width=250pt]{fig/SimpleCompiler.eps}\end{figure}
+\item One input language, one target architecture
+\end{itemize}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{A quick introduction to classical compiler design - 2}
+\begin{itemize}
+\item Modular compiler architecture
+\begin{figure}\includegraphics[width=250pt]{fig/LLVMCompiler.eps}\end{figure}
+\item Reuse core components across multiple languages and architectures
+\item LLVM intermediate representation (IR)
+\begin{itemize}
+\item Sort of like ``cross-platform assembly''
+\item Try out {\fontfamily{pcr}\selectfont @code\_llvm} in Julia
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{libuv, \url{https://github.com/libuv/libuv}}
+\vspace{10pt}
+\begin{minipage}{0.35\textwidth}
+\includegraphics[width=125pt]{fig/libuv_logo.eps}
+\end{minipage} \begin{minipage}{0.62\textwidth}
+\begin{itemize}
+\item What: ``Lib Unicorn Velociraptor''? \\
+pun on \texttt{-luv} to link to the library? \\
+cross platform asynchronous I/O
+\item Who: originally written to port Node.js to Windows, also used by Luvit, Pyuv, formerly Rust
+\item When: 2011
+\item License: MIT
+\item Written in: \texttt{C}
+\item Use in Julia: input/output, file system, process spawning, networking, terminal handling, without requiring POSIX
+\end{itemize}
+\end{minipage}
+
+\vspace{15pt}
+Julia uses a minor fork of libuv to support process piping syntax {\fontfamily{pcr}\selectfont run(`ls`|>`sort`)}, need work and pull requests to use upstream
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{libunwind, \url{http://nongnu.org/libunwind}}
+\begin{itemize}
+\item What: Support library for backtraces and profiling on Linux
+\item Who: David Mosberger, Arun Sharma, other contributors
+\item When: 2002
+\item License: MIT
+\item Written in: \texttt{C}
+\end{itemize}
+
+~\\
+~\\
+Different library from Apple, written in \texttt{C++} and assembly, used on OSX \url{https://github.com/JuliaLang/libosxunwind}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{utf8proc, {\small \url{http://public-software-group.org/utf8proc}}}
+\begin{itemize}
+\item What: Unicode processing, normalization, case folding
+\item Who: Public Software Group
+\item When: 2006
+\item License: MIT
+\item Written in: \texttt{C}
+\end{itemize}
+
+
+Unicode is complicated!
+\begin{itemize}
+\item Variable width encodings
+\item Combining characters
+\item Different normalization forms
+\item Similar looking but distinct codepoints
+\end{itemize}
+
+~\\
+Forked and updated to latest Unicode version by Steven G. Johnson and Jiahao Chen for Julia 0.4-dev, {\footnotesize \url{https://github.com/JuliaLang/libmojibake}}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Group 2, used in Julia standard library}
+\begin{itemize}
+\item OpenBLAS: Dense linear algebra
+\item SuiteSparse: Sparse matrix factorizations
+\item ARPACK: Sparse eigenvalue problems
+\item FFTW: Fourier transforms
+\item GMP: Arbitrary precision integers (\texttt{BigInt})
+\item MPFR: Arbitrary precision floating point (\texttt{BigFloat})
+\item PCRE: Regular expressions
+\item OpenLibm: Math functions normally found in \texttt{libm}
+\item OpenSpecFun: Additional special functions
+\item dSFMT: Random number generation
+\item Rmath: Distributions and statistical functions
+\item double-conversion: Floating point to string conversion (Julia $\leq$ 0.3.x)
+\item Git (in Julia $\leq$ 0.3.x) or libgit2 (0.4 WIP): Package manager
+\end{itemize}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{OpenBLAS, \url{http://openblas.net}}
+
+\begin{minipage}{0.3\textwidth}
+\includegraphics[width=100pt]{fig/LAPACK_logo.eps}
+\end{minipage} \begin{minipage}{0.68\textwidth}
+\begin{itemize}
+\item What: Open source high performance implementation of the Basic Linear Algebra Subprograms (BLAS) and Linear Algebra Package (LAPACK)
+\item Who: originally Kazushige Goto, now maintained by Xianyi Zhang, Werner Saar, and others
+\item When: GotoBLAS 2002, OpenBLAS 2011
+\item License: BSD
+\item Written in: Fortran, assembly, \texttt{C}
+\item Use in Julia: dense linear algebra
+\end{itemize}
+\end{minipage}
+
+\vspace{15pt}
+Takes a long time to compile when \texttt{OPENBLAS\_DYNAMIC\_ARCH=1}, \\
+builds optimized kernel implementations for many recent CPU families \\
+(Nehalem, Sandy Bridge, Haswell, etc)
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{BLAS in one slide}
+
+\includegraphics[width=0.9\textwidth]{fig/BLAS-snapshot.eps}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Levels of BLAS and LAPACK}
+\begin{itemize}
+\item Level 1 BLAS
+\begin{itemize}
+\item Vector operations: scale, add, copy, dot product, find largest element
+\item $O(n)$ operations on $O(n)$ data
+\end{itemize}
+\item Level 2 BLAS
+\begin{itemize}
+\item Matrix-vector operations: $A * x$, triangular solve, rank 1 or 2 updates
+\item $O(n^2)$ operations on $O(n^2)$ data
+\end{itemize}
+\item Level 3 BLAS
+\begin{itemize}
+\item Matrix-matrix operations: $A * B$, triangular solve for multiple right hand sides, rank $k$ updates
+\item $O(n^3)$ operations on $O(n^2)$ data
+\item Where the important cache optimizations happen
+\end{itemize}
+\item LAPACK (API does not fit on one slide)
+\begin{itemize}
+\item Higher level factorizations, eigenvalue and singular value decompositions designed to use efficient BLAS-3 operations
+\end{itemize}
+\item Reference Fortran implementations from Netlib are slow
+\begin{itemize}
+\item Better to use an optimized (SIMD, multithreaded) \\
+implementation like OpenBLAS or Intel MKL
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{SuiteSparse, \url{http://suitesparse.com}}
+
+\vspace{-5pt}
+\begin{center}
+\includegraphics[width=0.6\textwidth]{fig/SuiteSparse_logo.eps}
+\end{center}
+\vspace{-15pt}
+\begin{itemize}
+\item What: Sparse linear algebra -- LU, Cholesky, and QR factorizations
+\item Who: Tim Davis, also used by Matlab, Mathematica, Google Ceres
+\item When: 2006 or earlier?
+\item License: LGPL
+\item Written in: \texttt{C}, \texttt{C++}
+\end{itemize}
+
+What makes a matrix sparse?
+\begin{itemize}
+\item Enough elements are zero to be worth taking advantage of
+\item Nonzero structure and permutations very important
+\item Graph theory for structure, linear algebra for numerics
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{ARPACK, {\small \url{https://github.com/opencollab/arpack-ng}}}
+\begin{itemize}
+\item What: ARnoldi PACKage for eigenvalue problems $A x = \lambda x$ with \\
+sparse $A$, iterative algorithms to find a small set of $\lambda$ values
+\item Who: Rich Lehoucq, Kristi Maschoff, et al, \\
+also used by SciPy, Matlab, Octave
+\item When: 1996
+\item License: BSD
+\item Written in: Fortran 77
+\end{itemize}
+
+~\\
+Work in progress to replace this with pure Julia code, see \url{https://github.com/JuliaLang/IterativeSolvers.jl/pull/31}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{FFTW, \url{http://fftw.org}}
+
+\vspace{-5pt}
+\begin{center}
+\includegraphics[width=0.4\textwidth]{fig/fftw-logo-med.eps}
+\end{center}
+\vspace{-15pt}
+\begin{itemize}
+\item What: Fastest Fourier Transform in the West
+\item Who: Matteo Frigo and Steven G. Johnson
+\item When: 1997
+\item License: GPL
+\item Written in: \texttt{C}, code generator in OCaml
+\end{itemize}
+
+~\\
+Work in progress to write a pure Julia FFT and move FFTW to an optional package, see \url{https://github.com/JuliaLang/julia/pull/6193}
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{GMP, \url{https://gmplib.org}}
+
+\begin{center}
+\includegraphics[width=0.4\textwidth]{fig/GMP_logo.eps}
+\end{center}
+\begin{itemize}
+\item What: GNU Multiple Precision library for arbitrary precision integer arithmetic (\texttt{BigInt} in Julia)
+\item Who: Torbj\"{o}rn Granlund, GNU Project, many contributors
+\item When: 1991
+\item License: LGPL
+\item Written in: \texttt{C}, assembly
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{MPFR, \url{http://mpfr.org}}
+
+\begin{center}
+\includegraphics[width=0.4\textwidth]{fig/Mpfr_logo.eps}
+\end{center}
+\begin{itemize}
+\item What: GNU Multiple Precision Floating-point Reliable library for arbitrary precision floating-point arithmetic (\texttt{BigFloat} in Julia)
+\item Who: INRIA, GNU Project, many contributors
+\item When: 2000
+\item License: LGPL
+\item Written in: \texttt{C}
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{PCRE, \url{http://pcre.org}}
+
+\begin{block}
+\footnotesize
+Some people, when confronted with a problem, think ``I know, I'll use regular expressions.'' Now they have two problems. -- Jamie Zawinski
+\end{block}
+
+\begin{itemize}
+\item What: Perl Compatible Regular Expressions (\texttt{r"..."} in Julia)
+\item Who: Philip Hazel, Zoltan Herczeg
+\item When: 1997
+\item License: BSD
+\item Written in: \texttt{C}
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{OpenLibm, \url{http://openlibm.org}}
+
+\begin{itemize}
+\item What: ``high quality, portable, standalone C mathematical library"
+\item Who: Viral Shah and other JuliaLang contributors, code originally from FreeBSD msun, OpenBSD libm, and Freely Distributable FDLIBM (\url{http://www.netlib.org/fdlibm})
+\item When: 2011, original code from 1992 or earlier
+\item License: BSD
+\item Written in: \texttt{C}, assembly
+\item Why: Performance and accuracy of system \texttt{libm} for trig, sqrt, exp, log, etc varies between platforms, more reliable to build our own
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{OpenSpecFun, {\small \url{https://github.com/JuliaLang/openspecfun}}}
+
+\begin{itemize}
+\item What: Collection of special functions -- Bessel and Airy functions from AMOS library, complex error functions from Faddeeva
+\item Who: Donald Amos from \url{http://netlib.org/amos}, \\
+Faddeeva by Steven G. Johnson {\small \url{http://ab-initio.mit.edu/wiki/index.php/Faddeeva_Package}}
+\item When: Amos code from 1985 or earlier, Faddeeva 2012, OpenSpecFun 2013
+\item License: MIT, Public Domain
+\item Written in: Fortran 77, \texttt{C++}, \texttt{C}
+\item Why: Pieces that were split out from OpenLibm because they are \\
+not included in system \texttt{libm} libraries
+\end{itemize}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{dSFMT, {\small \url{http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT}}}
+
+\begin{itemize}
+\item What: Double precision SIMD-oriented Fast Mersenne Twister random number generator (RNG)
+\item Who: Matsuo Saito and Makoto Matsumoto
+\item When: 2007
+\item License: BSD
+\item Written in: \texttt{C}
+\end{itemize}
+
+~\\
+Julia's RNG code is undergoing heavy development on 0.4-dev right now, good chance dSFMT might be replaced by some alternate RNG \\
+see \url{https://github.com/JuliaLang/julia/issues/8786}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Rmath, \url{https://github.com/JuliaLang/Rmath}}
+
+\begin{itemize}
+\item What: Distributions and statistical functions from R, \\
+forked and patched to use same dSFMT RNG as Julia
+\item Who: R contributors, fork by Viral Shah
+\item When: Possibly as old as R, 1997? JuliaLang fork from 2013
+\item License: GPL
+\item Written in: \texttt{C}
+\end{itemize}
+
+~\\
+Not used by base Julia, only Distributions.jl and HypothesisTests.jl! \\
+see \url{https://github.com/JuliaStats/Distributions.jl/pull/138} for work to remove the dependency
+
+\end{frame}
+
+
+
+\end{document}
