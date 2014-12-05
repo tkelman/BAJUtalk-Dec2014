@@ -549,6 +549,10 @@ see \url{https://github.com/JuliaLang/julia/issues/8786}
 
 \begin{frame}\frametitle{Rmath, \url{https://github.com/JuliaLang/Rmath}}
 
+\begin{center}
+\includegraphics[width=0.2\textwidth]{fig/R_logo.eps}
+\end{center}
+\vspace{-15pt}
 \begin{itemize}
 \item What: Distributions and statistical functions from R, \\
 forked and patched to use same dSFMT RNG as Julia
@@ -558,12 +562,99 @@ forked and patched to use same dSFMT RNG as Julia
 \item Written in: \texttt{C}
 \end{itemize}
 
-~\\
 Not used by base Julia, only Distributions.jl and HypothesisTests.jl! \\
 see \url{https://github.com/JuliaStats/Distributions.jl/pull/138} for work to remove the dependency
 
 \end{frame}
 
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{double-conversion aka Grisu, {\small \url{https://github.com/floitsch/double-conversion}}}
+
+\begin{itemize}
+\item What: Efficient conversion between floating point and shortest equivalent decimal representation
+\item Who: Florian Loitsch, used by Google in V8
+\item When: 2010
+\item License: BSD
+\item Written in: \texttt{C++}
+\end{itemize}
+
+~\\
+No longer used in Julia 0.4-dev, algorithm was ported to Julia by \\
+Jacob Quinn in \url{https://github.com/JuliaLang/julia/pull/7291}
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Git, \url{http://git-scm.com}}
+
+\begin{center}
+\includegraphics[width=0.3\textwidth]{fig/Git-logo.eps}
+\end{center}
+\vspace{-15pt}
+\begin{itemize}
+\item What: Version control for Julia's package manager
+\item Who: Linus Torvalds, Junio Hamano, many contributors
+\item When: 2005
+\item License: GPL
+\item Written in: \texttt{C}, shell, Perl
+\end{itemize}
+
+\vspace{10pt}
+WIP to switch to libgit2 (\url{https://libgit2.github.com}) instead of \\
+command-line executable for Julia 0.4-dev to improve speed of \texttt{Pkg}, \\
+speak up at \url{https://github.com/JuliaLang/julia/issues/7584} \\
+if you want to help!
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{Group 3, used during build process}
+\begin{itemize}
+\item Patchelf
+\begin{itemize}
+\item Setting \texttt{rpath} on Linux, \url{http://nixos.org/patchelf.html}
+\end{itemize}
+\item Objconv
+\begin{itemize}
+\item Renaming library symbols on OSX, \url{http://www.agner.org/optimize/\#objconv}
+\end{itemize}
+\item Virtualenv
+\begin{itemize}
+\item Sandboxing Sphinx version for building documentation, \url{https://virtualenv.pypa.io}
+\end{itemize}
+\end{itemize}
+
+~\\
+Not much more to say about these
+
+\end{frame}
+
+%
+%--------------------------------------------------------------
+%
+
+\begin{frame}\frametitle{That's it!}
+
+\begin{center}
+Hopefully you have a better sense what's going on, \\
+next time you compile Julia from source.
+
+~\\
+~\\
+
+Any questions?
+\end{center}
+
+\end{frame}
 
 
 \end{document}
